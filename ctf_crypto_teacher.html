@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>CTF 古典密碼學｜教師解答</title>
+<style>
+body { font-family:"Microsoft JhengHei"; background:#fafafa; color:#222; padding:20px; }
+h1 { color:#333; border-bottom:3px solid #444; }
+.solution { background:#fff; border-left:6px solid #333; padding:15px; margin-bottom:20px; }
+.method { color:#0066cc; font-weight:bold; }
+.answer { color:#0a7; font-weight:bold; }
+</style>
+</head>
+<body>
+
+<h1>🏛️ 古典密碼學 CTF｜教師解答（密碼保護）</h1>
+<button onclick="unlock()">🔐 顯示解答</button>
+<div id="solutions" style="display:none;"></div>
+
+<script>
+const PASSWORD = "teacher123"; // 🔐 教師密碼
+
+const data = [
+{q:"ZHOFRPH WR WKH SDVW", a:"WELCOME TO THE PAST", h2:"Caesar Cipher，位移 = 3"},
+{q:"KHOOR ZRUOG", a:"HELLO WORLD", h2:"反向字母表 + 位移"},
+{q:"LXFOPVEFRNHR", a:"ATTACKATDAWN", h2:"Vigenère Cipher"},
+{q:"QWERTYUIOPASDFGHJKL", a:"ABCDEFGHIJKLMNOPQRSTUVWXYZ", h2:"Progressive / Running Shift"},
+{q:"TIEH  SI  SCEERT", a:"THIS IS SECRET", h2:"Transposition"},
+{q:"GATLMZCLRQTX", a:"INSTRUMENT", h2:"Playfair Cipher"},
+{q:"Uifsf jt b tfdsfu", a:"THERE IS A SECRET", h2:"Caesar -1"},
+{q:"7-4-11-11-14", a:"HELLO", h2:"A1Z26 + Caesar"},
+{q:";ppl rpwld", a:"HELLO WORLD", h2:"QWERTY 鍵盤位移"},
+{q:"HWEOLRLLOD", a:"HELLO WORLD", h2:"Transposition + Caesar"}
+];
+
+function unlock(){
+  const pw = prompt("請輸入教師密碼");
+  if(pw !== PASSWORD){ alert("密碼錯誤！"); return; }
+
+  let html = "<h2>📘 正確解答</h2>";
+  data.forEach((d,i)=>{
+    html += `<div class="solution">
+      <b>第 ${i+1} 題</b><br>
+      密文：${d.q}<br>
+      方法：<span class="method">${d.h2}</span><br>
+      ✔ 明文：<span class="answer">${d.a}</span>
+    </div>`;
+  });
+
+  const sol = document.getElementById("solutions");
+  sol.innerHTML = html;
+  sol.style.display = "block";
+}
+</script>
+
+</body>
+</html>

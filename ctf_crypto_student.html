@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>CTF 古典密碼學（Hint + CSV + FLAG）</title>
+<style>
+body { background:#0b0b0b; color:#eee; font-family:"Microsoft JhengHei"; padding:20px; }
+h1 { color:#00ffcc; }
+.block { background:#1a1a1a; padding:15px; margin-bottom:15px; border-left:5px solid #00ffcc; }
+input { width:100%; padding:6px; background:#222; color:#0f0; border:1px solid #555; }
+button { margin-top:6px; padding:6px 12px; background:#00ffcc; border:none; cursor:pointer; }
+button:disabled { background:#555; cursor:not-allowed; }
+.hint { display:none; margin-top:6px; color:#ffd700; }
+.correct { color:#0f0; }
+.wrong { color:#f55; }
+</style>
+</head>
+
+<body>
+
+<h1>🏛️ 古典密碼學 CTF（Hint + CSV + FLAG）</h1>
+
+<div class="block">
+<h3>👤 作答者資訊</h3>
+班級 <input id="cls">
+座號 <input id="num">
+姓名 <input id="name">
+</div>
+
+<div id="quiz"></div>
+
+<button id="submitBtn" onclick="submit()">送出作答</button>
+<button onclick="exportCSV()">📥 匯出 CSV</button>
+
+<div class="block" id="result"></div>
+
+<script>
+// =======================
+// 設定
+// =======================
+const POINT_PER_QUESTION = 10;
+let penalty = 0;
+let submitted = false;
+
+// =======================
+// 題目 / 答案 / 提示
+// =======================
+const data = [
+{ q:"ZHOFRPH WR WKH SDVW", a:"WELCOME TO THE PAST", h1:"試試最經典的位移方式", h2:"Caesar Cipher，位移 = 3" },
+{ q:"KHOOR ZRUOG", a:"HELLO WORLD", h1:"字母表一定是 A→Z 嗎？", h2:"反向字母表 + 位移" },
+{ q:"LXFOPVEFRNHR", a:"ATTACKATDAWN", h1:"規則在重複循環", h2:"Vigenère Cipher（經典例）" },
+{ q:"QWERTYUIOPASDFGHJKL", a:"ABCDEFGHIJKLMNOPQRSTUVWXYZ", h1:"同字母不同位置結果不同", h2:"Progressive / Running Shift" },
+{ q:"TIEH  SI  SCEERT", a:"THIS IS SECRET", h1:"沒有替換任何字母", h2:"Transposition（兩兩交換）" },
+{ q:"GATLMZCLRQTX", a:"INSTRUMENT", h1:"一次處理兩個字母", h2:"Playfair Cipher（I/J 合併）" },
+{ q:"Uifsf jt b tfdsfu", a:"THERE IS A SECRET", h1:"每個字母只差一點點", h2:"Caesar -1" },
+{ q:"7-4-11-11-14", a:"HELLO", h1:"數字對應字母", h2:"A1Z26" },
+{ q:";ppl rpwld", a:"HELLO WORLD", h1:"不是字母表順序", h2:"QWERTY 鍵盤位移" },
+{ q:"HWEOLRLLOD", a:"HELLO WORLD", h1:"字母都在，只是順序怪", h2:"Transposition + Caesar" }
+];
+
+// =======================
+// 題目生成
+// =======================
+const quiz = document.getElementById("quiz");
+
+data.forEach((d,i)=>{
+ quiz.innerHTML += `
+ <div class="block">
+ <b>第 ${i+1} 題（10 分）</b>
+ <pre>${d.q}</pre>
+ <input id="a${i}" placeholder="輸入明文">
+ <br>
+ <button class="hintBtn" onclick="showHint(${i},1)">Hint 1</button>
+ <button class="hintBtn" onclick="showHint(${i},2)">Hint 2</button>
+ <div id="h${i}1" class="hint">💡 ${d.h1}</div>
+ <div id="h${i}2" class="hint">💡 ${d.h2}</div>
+ <div id="r${i}"></div>
+ </div>`;
+});
+
+// =======================
+// 顯示提示（扣分）
+// =======================
+function showHint(i,n){
+ if(submitted) return;
+ const h = document.getElementById(`h${i}${n}`);
+ if(h.style.display !== "block"){
+   h.style.display = "block";
+   penalty += (n === 1 ? 0.5 : 1);
+ }
+}
+
+// =======================
+// 作答與鎖定
+// =======================
+function submit(){
+
+ if(submitted){
+   alert("已送出作答，不能再次作答！");
+   return;
+ }
+
+ const cls  = document.getElementById("cls").value;
+ const num  = document.getElementById("num").value;
+ const name = document.getElementById("name").value;
+
+ if(!cls || !num || !name){
+   alert("請填寫 班級 / 座號 / 姓名");
+   return;
+ }
+
+ let correctCount = 0;
+
+ data.forEach((d,i)=>{
+   const input = document.getElementById("a"+i);
+   const v = input.value.trim().toUpperCase();
+   const r = document.getElementById("r"+i);
+
+   if(v === d.a){
+     r.innerHTML = "✔ 正確";
+     r.className = "correct";
+     correctCount++;
+   } else {
+     r.innerHTML = "✘ 錯誤";
+     r.className = "wrong";
+   }
+
+   input.disabled = true; // 🔒 鎖定答案
+ });
+
+ // 🔒 鎖定 Hint
+ document.querySelectorAll(".hintBtn").forEach(b=>b.disabled=true);
+
+ const rawScore   = correctCount * POINT_PER_QUESTION;
+ const finalScore = Math.max(0, rawScore - penalty);
+
+ const flag = (correctCount === data.length)
+   ? "<br>🏴 FLAG{HINTS_ARE_DOUBLE_EDGED}"
+   : "";
+
+ document.getElementById("result").innerHTML = `
+ ${cls} ${num} ${name}<br>
+ 答對題數：${correctCount} / ${data.length}<br>
+ 原始分數：${rawScore}<br>
+ 提示扣分：${penalty}<br>
+ <b>最終分數：${finalScore}</b>
+ ${flag}
+ `;
+
+ document.getElementById("submitBtn").disabled = true;
+ submitted = true;
+}
+
+// =======================
+// CSV 匯出（UTF-8 BOM）
+// =======================
+function exportCSV(){
+ const headers = ["班級","座號","姓名"];
+ for(let i=0;i<data.length;i++) headers.push(`第${i+1}題`);
+ headers.push("原始分數","提示扣分","最終分數");
+
+ const cls  = document.getElementById("cls").value;
+ const num  = document.getElementById("num").value;
+ const name = document.getElementById("name").value;
+
+ let answers = [];
+ let correctCount = 0;
+
+ for(let i=0;i<data.length;i++){
+   const v = document.getElementById("a"+i).value.trim().toUpperCase();
+   answers.push(v);
+   if(v === data[i].a) correctCount++;
+ }
+
+ const rawScore   = correctCount * POINT_PER_QUESTION;
+ const finalScore = Math.max(0, rawScore - penalty);
+
+ let row = [cls,num,name,...answers,rawScore,penalty,finalScore];
+
+ let csv = headers.join(",") + "\n";
+ csv += row.map(v=>`"${v}"`).join(",") + "\n";
+
+ const BOM = "\uFEFF";
+ const blob = new Blob([BOM + csv], { type:"text/csv;charset=utf-8;" });
+
+ const a = document.createElement("a");
+ a.href = URL.createObjectURL(blob);
+ a.download = `${cls}_${num}_${name}_ctf.csv`;
+ a.click();
+}
+</script>
+
+</body>
+</html>
