@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>CTF 綜合題（Hint + CSV + FLAG + 教師解答）</title>
+<style>
+body { background:#0b0b0b; color:#eee; font-family:"Microsoft JhengHei"; padding:20px; }
+h1 { color:#00ffcc; }
+.block { background:#1a1a1a; padding:15px; margin-bottom:15px; border-left:5px solid #00ffcc; }
+input { width:100%; padding:6px; background:#222; color:#0f0; border:1px solid #555; }
+button { margin-top:6px; padding:6px 12px; background:#00ffcc; border:none; cursor:pointer; }
+button:disabled { background:#555; cursor:not-allowed; }
+.hint { display:none; margin-top:6px; color:#ffd700; }
+.correct { color:#0f0; }
+.wrong { color:#f55; }
+</style>
+</head>
+<body>
+
+<h1>🏴 CTF 綜合題（Hint + CSV + FLAG + 教師解答）</h1>
+
+<div class="block">
+<h3>👤 作答者資訊</h3>
+班級 <input id="cls">
+座號 <input id="num">
+姓名 <input id="name">
+</div>
+
+<div id="quiz"></div>
+
+<button id="submitBtn" onclick="submit()">送出作答</button>
+<button onclick="exportCSV()">📥 匯出 CSV</button>
+
+<div class="block" id="result"></div>
+
+<!-- 教師密碼解答 -->
+<div class="block">
+<h3>🔑 教師模式</h3>
+<input type="password" id="teacherPwd" placeholder="輸入教師密碼">
+<button onclick="unlockTeacher()">解鎖答案</button>
+<div id="teacherPanel" style="display:none;"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+<script>
+// =======================
+// 設定
+// =======================
+const POINT_PER_QUESTION = 5; // 每題 5 分
+let penalty = 0;
+let submitted = false;
+
+// =======================
+// 題目 / 答案 / 提示
+// =======================
+const data = [
+  // PWN 4 題
+  { q:"PWN-1: 退休的守門人", a:"EXPLOIT_SUCCESS", h1:"試著溢出 buffer", h2:"libc 固定，PIE 關閉" },
+  { q:"PWN-2: 會說話的菜單", a:"MENU_BYPASS", h1:"檢查輸入格式", h2:"格式化輸入可能導致 overflow" },
+  { q:"PWN-3: 安靜的記帳員", a:"SIGNED_INTEGER_OVERFLOW", h1:"注意 signed/unsigned", h2:"使用 printf / debug 觀察記憶體" },
+  { q:"PWN-4: 被保護的後門", a:"LEAK_CANARY", h1:"Canary 可泄露", h2:"debug 模式可利用" },
+
+  // WEB 4 題
+  { q:"WEB-1: 管理員不在家", a:"HEADER_INJECTION", h1:"檢查 HTTP header", h2:"可能可繞過登入" },
+  { q:"WEB-2: 消失的檔案", a:"PATH_TRAVERSAL", h1:"嘗試 ../", h2:"檔案不一定在 /uploads" },
+  { q:"WEB-3: 看不見的管理介面", a:"API_DISCOVERY", h1:"前端 JS 提示 API", h2:"嘗試隱藏路徑" },
+  { q:"WEB-4: 一次性的信任", a:"TOKEN_REPLAY", h1:"Token 可以重放", h2:"時間不是唯一隨機" },
+
+  // CRYPTO 4 題
+  { q:"CRYPTO-1: 重複的安全感", a:"RSA_GCD", h1:"兩個金鑰有共因數", h2:"GCD 計算私鑰" },
+  { q:"CRYPTO-2: 太短的隨機", a:"IV_REUSE", h1:"IV 重複", h2:"CBC 模式不能重複" },
+  { q:"CRYPTO-3: 簽名的影子", a:"ECDSA_NONCE_LEAK", h1:"重複 nonce 導致私鑰洩露", h2:"數學運算可破解" },
+  { q:"CRYPTO-4: 自己設計的加密", a:"CUSTOM_XOR", h1:"XOR 加位移不安全", h2:"嘗試頻率分析" },
+
+  // REVERSE 4 題
+  { q:"REV-1: 假裝很複雜", a:"STATIC_STRINGS", h1:"觀察字串常量", h2:"函式名不重要" },
+  { q:"REV-2: 走不到的路", a:"UNREACHABLE_FLAG", h1:"分析條件分支", h2:"逆向可能進入死分支" },
+  { q:"REV-3: 自己驗證自己", a:"MEMORY_KEY", h1:"金鑰藏在記憶體", h2:"執行時 dump" },
+  { q:"REV-4: 時間差", a:"TIMING_ATTACK", h1:"不同輸入耗時不同", h2:"利用 timing 推測" },
+
+  // FORENSICS 4 題
+  { q:"FOR-1: 被擦掉的照片", a:"FILE_MAGIC", h1:"檢查檔案尾部", h2:"不是所有檔案尾都正常" },
+  { q:"FOR-2: 安靜的封包", a:"DNS_EXFIL", h1:"分析 DNS 請求", h2:"名稱也可能藏資料" },
+  { q:"FOR-3: 時間線的謊言", a:"LOG_MANIPULATION", h1:"檢查時間順序", h2:"可能系統時間不可靠" },
+  { q:"FOR-4: 刪不掉的痕跡", a:"DELETED_FOR_RECOVERY", h1:"檔案雖刪除", h2:"可以從磁區恢復" }
+];
+
+// =======================
+// 題目生成
+// =======================
+const quiz = document.getElementById("quiz");
+data.forEach((d,i)=>{
+ quiz.innerHTML += `
+ <div class="block">
+ <b>第 ${i+1} 題（5 分）</b>
+ <pre>${d.q}</pre>
+ <input id="a${i}" placeholder="輸入答案">
+ <br>
+ <button class="hintBtn" onclick="showHint(${i},1)">Hint 1</button>
+ <button class="hintBtn" onclick="showHint(${i},2)">Hint 2</button>
+ <div id="h${i}1" class="hint">💡 ${d.h1}</div>
+ <div id="h${i}2" class="hint">💡 ${d.h2}</div>
+ <div id="r${i}"></div>
+ </div>`;
+});
+
+// =======================
+// Hint 顯示（扣分）
+// =======================
+function showHint(i,n){
+ if(submitted) return;
+ const h = document.getElementById(`h${i}${n}`);
+ if(h.style.display !== "block"){
+   h.style.display = "block";
+   penalty += (n===1?0.5:1);
+ }
+}
+
+// =======================
+// 作答與鎖定
+// =======================
+function submit(){
+ if(submitted){ alert("已送出作答"); return; }
+ const cls  = document.getElementById("cls").value;
+ const num  = document.getElementById("num").value;
+ const name = document.getElementById("name").value;
+ if(!cls||!num||!name){ alert("請填寫班級/座號/姓名"); return; }
+
+ let correctCount=0;
+ data.forEach((d,i)=>{
+   const input=document.getElementById("a"+i);
+   const v=input.value.trim().toUpperCase();
+   const r=document.getElementById("r"+i);
+   if(v===d.a){ r.innerHTML="✔ 正確"; r.className="correct"; correctCount++; }
+   else{ r.innerHTML="✘ 錯誤"; r.className="wrong"; }
+   input.disabled=true;
+ });
+ document.querySelectorAll(".hintBtn").forEach(b=>b.disabled=true);
+
+ const rawScore=correctCount*POINT_PER_QUESTION;
+ const finalScore=Math.max(0,rawScore-penalty);
+ const flag=(correctCount===data.length)?"<br>🏴 FLAG{CTF_MASTER_OF_ALL_DOMAINS}":"";
+ document.getElementById("result").innerHTML=`
+ ${cls} ${num} ${name}<br>
+ 答對題數：${correctCount}/${data.length}<br>
+ 原始分數：${rawScore}<br>
+ 提示扣分：${penalty}<br>
+ <b>最終分數：${finalScore}</b>
+ ${flag}
+ `;
+ document.getElementById("submitBtn").disabled=true;
+ submitted=true;
+}
+
+// =======================
+// CSV 匯出
+// =======================
+function exportCSV(){
+ const headers=["班級","座號","姓名"];
+ for(let i=0;i<data.length;i++) headers.push(`第${i+1}題`);
+ headers.push("原始分數","提示扣分","最終分數");
+
+ const cls=document.getElementById("cls").value;
+ const num=document.getElementById("num").value;
+ const name=document.getElementById("name").value;
+ let answers=[],correctCount=0;
+ for(let i=0;i<data.length;i++){
+   const v=document.getElementById("a"+i).value.trim().toUpperCase();
+   answers.push(v);
+   if(v===data[i].a) correctCount++;
+ }
+ const rawScore=correctCount*POINT_PER_QUESTION;
+ const finalScore=Math.max(0,rawScore-penalty);
+ let row=[cls,num,name,...answers,rawScore,penalty,finalScore];
+ let csv=headers.join(",")+"\n";
+ csv+=row.map(v=>`"${v}"`).join(",")+"\n";
+ const BOM="\uFEFF";
+ const blob=new Blob([BOM+csv],{type:"text/csv;charset=utf-8;"});
+ const a=document.createElement("a");
+ a.href=URL.createObjectURL(blob);
+ a.download=`${cls}_${num}_${name}_ctf.csv`;
+ a.click();
+}
+
+// =======================
+// 教師密碼解答
+// =======================
+const TEACHER_HASH="aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d"; // md5("teacher123")
+
+function unlockTeacher(){
+ const pwd=document.getElementById("teacherPwd").value;
+ if(CryptoJS.MD5(pwd).toString()!==TEACHER_HASH){
+   alert("密碼錯誤");
+   return;
+ }
+ let html="<h4>📘 教師解答</h4>";
+ data.forEach((d,i)=>{
+   html+=`第${i+1}題答案：${d.a} <br>Hint2：${d.h2}<br>`;
+ });
+ document.getElementById("teacherPanel").innerHTML=html;
+ document.getElementById("teacherPanel").style.display="block";
+}
+</script>
+
+</body>
+</html>
