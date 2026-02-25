@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>IP 子網路判斷器</title>
+<style>
+body {
+  font-family: "Microsoft JhengHei", Arial, sans-serif;
+  background: #f2f2f2;
+  padding: 20px;
+}
+input, button {
+  padding: 6px;
+  margin: 5px 0;
+}
+#result {
+  margin-top: 10px;
+  font-size: 18px;
+  font-weight: bold;
+}
+</style>
+</head>
+<body>
+
+<h2>IP 子網路判斷器</h2>
+
+IP 1：<br>
+<input id="ip1" placeholder="例如：192.168.1.10"><br>
+
+IP 2：<br>
+<input id="ip2" placeholder="例如：192.168.1.200"><br>
+
+子網路遮罩：<br>
+<input id="mask" placeholder="例如：255.255.255.0"><br>
+
+<button onclick="checkSubnet()">判斷是否同一子網路</button>
+
+<div id="result"></div>
+
+<script>
+function ipToInt(ip) {
+  return ip.split('.')
+    .map(Number)
+    .reduce((acc, oct) => (acc << 8) + oct, 0) >>> 0;
+}
+
+function checkSubnet() {
+  const ip1 = document.getElementById("ip1").value.trim();
+  const ip2 = document.getElementById("ip2").value.trim();
+  const mask = document.getElementById("mask").value.trim();
+
+  if (!ip1 || !ip2 || !mask) {
+    document.getElementById("result").innerText = "請輸入完整 IP 與子網路遮罩";
+    return;
+  }
+
+  try {
+    const net1 = ipToInt(ip1) & ipToInt(mask);
+    const net2 = ipToInt(ip2) & ipToInt(mask);
+
+    document.getElementById("result").innerText =
+      net1 === net2
+        ? "✅ 兩個 IP 位於同一子網路"
+        : "❌ 兩個 IP 不在同一子網路";
+  } catch {
+    document.getElementById("result").innerText = "IP 或遮罩格式錯誤";
+  }
+}
+</script>
+
+</body>
+</html>
